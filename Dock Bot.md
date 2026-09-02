@@ -308,7 +308,9 @@ open index.html      # or double-click it; no server
 node --test test.js
 ```
 
-`test.js` uses only `node:test` and `node:assert` and covers every §6 scenario that names a core function. **Done means:** tests green, the 15-move script solves the level, and this checklist passes from `file://`: no console errors, crisp pixels (checked on a high-density display, where the second scaling stage bites), one cell per arrow press with no key repeat, a docked crate glows, solving freezes the arrows and shows the solved HUD, R restarts from any state with the counter at 0, N produces a fresh board that is solvable and no easier than the floor, and R on a generated board brings back that same board rather than another one.
+`test.js` uses only `node:test` and `node:assert` and covers every §6 scenario that names a core function.
+
+**Keep it fast.** This is the file you run after every change, and a suite that takes fifteen seconds stops being run. The generated-board scenarios are what threaten that: each wants a board, and making one costs tens of milliseconds because the search runs over every candidate. Written the obvious way — generating inside each assertion, across a few dozen seeds — the suite goes from well under a second to roughly fifteen. Generate a small sample of boards once, and have the assertions share it. A dozen seeds prove as much as forty, and the suite stays about a second. **Done means:** tests green, the 15-move script solves the level, and this checklist passes from `file://`: no console errors, crisp pixels (checked on a high-density display, where the second scaling stage bites), one cell per arrow press with no key repeat, a docked crate glows, solving freezes the arrows and shows the solved HUD, R restarts from any state with the counter at 0, N produces a fresh board that is solvable and no easier than the floor, and R on a generated board brings back that same board rather than another one.
 
 ## 8. Reference notes
 
