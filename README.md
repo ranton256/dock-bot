@@ -26,7 +26,8 @@ double-clicking a file:
 
 1. **No dependencies.** Plain JavaScript, HTML canvas, and the DOM. No framework, no
    library, no CDN, no bundler, no package manager. There is no `package.json` and
-   you should not add one.
+   you should not add one — its absence is what keeps `require('./game.js')` working
+   in your tests, so `npm init` breaks them in a way that looks nothing like its cause.
 2. **Exactly five files**, no more:
    ```
    index.html
@@ -45,6 +46,11 @@ double-clicking a file:
 5. **No animation loop.** No `requestAnimationFrame`. Draw once when the atlas
    loads, and once after any keypress that actually changes something.
 6. **No randomness.** The level text plus your key presses fully determine the state.
+7. **Crisp pixels take two settings, not one.** Turning off image smoothing on the
+   canvas context controls how the sprite sheet is blown up *into* the canvas. It
+   does nothing about the browser scaling the canvas *element* afterwards, which is
+   what happens on a high-density display. Section 4 of the spec says what to do.
+   Check it on a Retina screen; it looks fine on an ordinary one either way.
 
 ## Running it
 
