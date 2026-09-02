@@ -33,6 +33,42 @@ Nine 16×16 frames in one 64×64 PNG atlas, `assets/dock_bot.png`, on a 4×4 gri
 | (3,1) | `wall` | PROVIDED | solid wall |
 | (0,2) | `pad` | PROVIDED | empty dock pad |
 
+### Frame compositing contract
+
+The nine frames are not interchangeable tiles. §6's draw order paints a cell's base tile
+and then composites entities over it, which splits the inventory in two:
+
+| Kind | Frames | Requirement |
+|---|---|---|
+| Terrain | `floor`, `wall`, `pad` | fully opaque across all 256 pixels; drawn as a cell's base layer |
+| Entity | the four `bot_*` frames, `crate`, `crate_docked` | transparent background; drawn over a terrain tile |
+
+`crate_docked` draws **on top of** the `pad` tile, so it carries no pad backdrop of its
+own. A docked-crate frame that included one would show a doubled pad edge in every filled
+cell.
+
+The seven cells the inventory does not name — (1,2), (2,2), (3,2), (0,3), (1,3), (2,3),
+(3,3) — are fully transparent, so a source rectangle aimed at an unused cell draws nothing
+rather than stray pixels.
+
+Every pixel in the atlas is either fully opaque or fully transparent; nothing uses partial
+alpha. The atlas is magnified ×3 with smoothing off, which turns a feathered edge into a
+hard, discoloured step rather than a soft one.
+
+**The four bot frames share one chassis.** Only the visor moves, to the facing edge. They
+are meant to read as one robot facing four ways, not as four robots.
+
+**Palette (informative).** The supplied atlas uses twelve flat colours. Nothing in the
+game references them — they are recorded here so page and HUD styling can be tuned to the
+art rather than guessed at.
+
+| Role | Colours |
+|---|---|
+| Structure | `#0d1117` outline · `#16202b` dark steel · `#22303f` mid steel · `#3a4f63` steel · `#56718a` steel highlight |
+| Pads | `#0d4a4e` teal dark · `#14939b` teal · `#35e0e6` glow teal |
+| Crates | `#6e4211` amber shade · `#b0741c` amber · `#e8a838` amber highlight |
+| Bot | `#a8f0ff` visor cyan |
+
 ## 3. Game constants
 
 | Constant | Value | Notes |

@@ -86,6 +86,8 @@ it, and how you paste a bug into a message to someone else.
 
 ## Before you start
 
-Confirm `assets/dock_bot.png` is present — it is a single 64x64 atlas holding nine
-16x16 frames, and Section 2 of the spec maps every cell. If it is missing, ask for
-it rather than drawing your own; the frame layout is hard-coded against it.
+`assets/dock_bot.png` is provided: a single 64x64 atlas holding nine 16x16 frames.
+Do not redraw or replace it — the frame layout is hard-coded against it. Section 2 of
+the spec maps every cell and, just as importantly, says which frames are opaque terrain
+and which are transparent-backed entities drawn over them. Read that before you write
+`draw`.
