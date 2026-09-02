@@ -33,6 +33,42 @@ Nine 16×16 frames in one 64×64 PNG atlas, `assets/dock_bot.png`, on a 4×4 gri
 | (3,1) | `wall` | PROVIDED | solid wall |
 | (0,2) | `pad` | PROVIDED | empty dock pad |
 
+### Frame compositing contract
+
+The nine frames are not interchangeable tiles. §6's draw order paints a cell's base tile
+and then composites entities over it, which splits the inventory in two:
+
+| Kind | Frames | Requirement |
+|---|---|---|
+| Terrain | `floor`, `wall`, `pad` | fully opaque across all 256 pixels; drawn as a cell's base layer |
+| Entity | the four `bot_*` frames, `crate`, `crate_docked` | transparent background; drawn over a terrain tile |
+
+`crate_docked` draws **on top of** the `pad` tile, so it carries no pad backdrop of its
+own. A docked-crate frame that included one would show a doubled pad edge in every filled
+cell.
+
+The seven cells the inventory does not name — (1,2), (2,2), (3,2), (0,3), (1,3), (2,3),
+(3,3) — are fully transparent, so a source rectangle aimed at an unused cell draws nothing
+rather than stray pixels.
+
+Every pixel in the atlas is either fully opaque or fully transparent; nothing uses partial
+alpha. The atlas is magnified ×3 with smoothing off, which turns a feathered edge into a
+hard, discoloured step rather than a soft one.
+
+**The four bot frames share one chassis.** Only the visor moves, to the facing edge. They
+are meant to read as one robot facing four ways, not as four robots.
+
+**Palette (informative).** The supplied atlas uses twelve flat colours. Nothing in the
+game references them — they are recorded here so page and HUD styling can be tuned to the
+art rather than guessed at.
+
+| Role | Colours |
+|---|---|
+| Structure | `#0d1117` outline · `#16202b` dark steel · `#22303f` mid steel · `#3a4f63` steel · `#56718a` steel highlight |
+| Pads | `#0d4a4e` teal dark · `#14939b` teal · `#35e0e6` glow teal |
+| Crates | `#6e4211` amber shade · `#b0741c` amber · `#e8a838` amber highlight |
+| Bot | `#a8f0ff` visor cyan |
+
 ## 3. Game constants
 
 | Constant | Value | Notes |
@@ -41,7 +77,7 @@ Nine 16×16 frames in one 64×64 PNG atlas, `assets/dock_bot.png`, on a 4×4 gri
 | Scale / canvas | ×3 · 384 × 288 px | the HUD is a DOM element below the canvas |
 | Bot spawn | column 1, row 3, facing right | the `B` in the level map |
 | Move keys | ArrowUp, ArrowDown, ArrowLeft, ArrowRight | one cell per press; no repeat while held |
-| Restart key | R | any state |
+| Restart key | R | any state; ignore presses carrying Ctrl, Cmd or Alt, so Cmd+R still reloads |
 | Move counter | starts at 0, +1 per successful move | a push is one move; a blocked press is zero |
 | Optimal solution | 15 moves: `UURDLDRDRRUURUL` | used by the scripted playtest |
 
@@ -58,14 +94,22 @@ Nine 16×16 frames in one 64×64 PNG atlas, `assets/dock_bot.png`, on a 4×4 gri
 
 `#` wall · `.` floor · `P` empty pad · `C` crate on floor · `B` bot on floor. `renderText` output adds `X` crate on a pad and `b` bot on a pad.
 
+Canonical form is six lines joined by a single newline, with no leading or trailing
+newline. `renderText` emits exactly that. This matters less where you compare its
+output against the level constant — there the convention cancels out — than in the
+first expected board you type by hand, which picks up a leading newline from a
+template literal and fails against output that never had one.
+
 ## 4. Technical constraints
 
-1. **Stack:** HTML5 canvas 2D and the DOM only. No framework, library, CDN, transpiler, or package manager. Node 20+ for tests.
+1. **Stack:** HTML5 canvas 2D and the DOM only. No framework, library, CDN, transpiler, or package manager. Node 20+ for tests. Do not add a `package.json` either: its absence is what keeps `.js` resolving as CommonJS, and therefore what lets `test.js` call `require('./game.js')`. Running `npm init` will break the test suite in a way that looks nothing like its cause.
 2. **Files:** exactly `index.html`, `style.css`, `game.js`, `test.js`, and `assets/dock_bot.png`. No `<script type="module">` and no runtime `fetch`; both are blocked over `file://`. The atlas loads through an `<img>` element.
 3. **Architecture:** `game.js` is a pure core plus a thin browser shell. Core: `parseLevel(text)`, `step(state, dir)`, `isSolved(state)`, `renderText(state)`, `playMoves(state, moves)`; none touch the DOM, and `step` returns a new state without mutating its input. Shell: canvas, key listener, HUD element, `draw(state)`.
 4. **No animation loop.** No `requestAnimationFrame`. The shell draws once after the atlas loads and once after every key event that changes state.
 5. **Coordinates:** cells are `(col, row)` integers, origin top-left, exclusive upper bounds (`0 ≤ col < 8`, `0 ≤ row < 6`). Screen position is `col*16*3, row*16*3`.
 6. **Randomness:** none. Level text plus key sequence fully determines the state.
+7. **Two scaling stages, not one.** Disabling image smoothing on the 2D context governs how the atlas is magnified *into* the canvas. It says nothing about how the browser then scales the canvas *element*: under page zoom, or on a high-density display, the compositor resamples the finished canvas with its own smoothing and the art goes soft while the JavaScript still looks correct. Give the canvas its intrinsic 384×288 through the `width` and `height` attributes, never a conflicting CSS size, and set `image-rendering: pixelated` on the element. Check this on a high-density display; it looks right on an ordinary one either way.
+8. **Encoding:** declare `<meta charset="utf-8">`. The solved message contains an em dash, and a script loaded over `file://` inherits the document's encoding — without a declaration a browser may fall back to a locale default and render mojibake for some users and not others. Writing the character as a `\u2014` escape makes the string survive a source file saved in the wrong encoding as well.
 
 ## 5. Diagnostics and playtest tooling
 
@@ -154,6 +198,7 @@ Scenario: Level solved
   Then isSolved returns true and every crate draws with the crate_docked frame
   And the HUD reads "Solved in N moves — press R", where N is the move counter
   And arrow keys no longer change the state, including facing and the counter
+  And step enforces this, not the key listener, so a scripted replay is frozen too
 
 Scenario: Restarting
   Given the game is in any state, solved or not
@@ -186,6 +231,12 @@ Scenario: Blocked moves inside a script
   Given a freshly parsed state
   When playMoves is called with "LLL"
   Then the bot is still at (1,3), facing left, with the move counter at 0
+
+Scenario: A replay cannot count past the solve
+  Given a freshly parsed state
+  When playMoves is called with "UURDLDRDRRUURUL" followed by any further moves
+  Then isSolved returns true and the move counter is still 15
+  And the board is unchanged by those further moves
 ```
 
 ## 7. Build, test, and verify
@@ -195,7 +246,7 @@ open index.html      # or double-click it; no server
 node --test test.js
 ```
 
-`test.js` uses only `node:test` and `node:assert` and covers every §6 scenario that names a core function. **Done means:** tests green, the 15-move script solves the level, and this checklist passes from `file://`: no console errors, crisp pixels, one cell per arrow press with no key repeat, a docked crate glows, solving freezes the arrows and shows the solved HUD, R restarts from any state with the counter at 0.
+`test.js` uses only `node:test` and `node:assert` and covers every §6 scenario that names a core function. **Done means:** tests green, the 15-move script solves the level, and this checklist passes from `file://`: no console errors, crisp pixels (checked on a high-density display, where the second scaling stage bites), one cell per arrow press with no key repeat, a docked crate glows, solving freezes the arrows and shows the solved HUD, R restarts from any state with the counter at 0.
 
 ## 8. Reference notes
 
