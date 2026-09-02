@@ -151,7 +151,8 @@ const COLS_INNER = COLS - 1;
 const ROWS_INNER = ROWS - 1;
 
 const SOLVER_CAP = 200000;   // positions; past this a board counts as unsolvable
-const CANDIDATE_CAP = 200;   // boards tried per generateLevel call
+const CANDIDATE_CAP = 60;    // boards tried per generateLevel call; about eight
+                             // are needed, so this bounds a failed press near 0.7s
 const DIFFICULTY_FLOOR = 12; // shortest solution, in moves
 const CRATE_COUNT = 3;
 
