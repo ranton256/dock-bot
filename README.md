@@ -3,6 +3,9 @@
 A small delivery robot pushes cargo crates onto glowing dock pads in a one-screen
 warehouse. Every crate on a pad solves the level. Nothing moves unless you move.
 
+There is one hand-authored level to learn on, and after that the game generates
+fresh boards on demand — each one checked to be solvable before you ever see it.
+
 This repo is your starting point. It contains the specification, not the game —
 you are going to write the game.
 
@@ -73,6 +76,8 @@ passes with the game opened from `file://`:
 - a crate sitting on a pad glows
 - solving the level freezes the arrows and shows the solved message
 - `R` restarts from any state, with the move counter back at `0`
+- `N` gives you a fresh board that is solvable and not trivially easy
+- `R` on a generated board brings back *that* board, not a different one
 
 ## A suggested order of attack
 
@@ -85,6 +90,15 @@ You do not have to work this way, but it front-loads everything a test can prove
 2. **Then the shell.** `index.html`, `style.css`, `draw`, the key listener, the HUD.
    This is the part only a human can check, so it is the part you want resting on
    logic you have already proven.
+3. **Then generation, and `solve` before it.** Write the solver first and point it
+   at the hand-authored level: it should come back with the 15 moves Section 3 calls
+   optimal, which is a strong signal it works. Only then build `generateLevel` on
+   top, because generation is not allowed to hand you a board the solver has not
+   already solved.
+
+The solver is the one genuinely hard piece here. Do not be clever with it: a
+breadth-first search over board positions is enough, because this board is small
+enough that you can explore all of it in well under a second.
 
 `renderText` is your debugging tool. Canvas screenshots do not work from `file://`,
 so an exact ASCII picture of the board is how you inspect state, how tests assert on
