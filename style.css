@@ -38,3 +38,18 @@ canvas {
   font-size: 16px;
   letter-spacing: 0.04em;
 }
+
+/* Additional to the HUD, never a replacement: the HUD keeps its exact wording. */
+#boardline {
+  margin: 6px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #14939b;
+}
+
+#legend {
+  margin: 10px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: #3a4f63;
+}

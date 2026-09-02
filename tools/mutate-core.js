@@ -54,6 +54,32 @@ const MUTATIONS = [
       '  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return true;',
       '  // bounds check removed']],
   },
+  {
+    name: 'generator skips the solvability check',
+    why: 'an unsolvable board would be handed to the player',
+    edits: [['game.js',
+      '    if (solution === null || solution.length < floor) continue;',
+      '    if (solution !== null && solution.length < floor) continue;']],
+  },
+  {
+    name: 'generator skips the difficulty floor',
+    why: 'boards solvable in one push would count as generated',
+    edits: [['game.js',
+      '    if (solution === null || solution.length < floor) continue;',
+      '    if (solution === null) continue;']],
+  },
+  {
+    name: 'generator uses unseeded randomness',
+    why: 'a seed would stop naming a board, and no bug report could be reproduced',
+    edits: [['game.js', '  const random = makeRandom(seed);', '  const random = Math.random;']],
+  },
+  {
+    name: 'search ignores where the bot stands',
+    why: 'positions differing only by the bot would collapse and the search would be unsound',
+    edits: [['game.js',
+      "  [...state.crates].sort().join('|') + '#' + state.bot.col + ',' + state.bot.row;",
+      "  [...state.crates].sort().join('|');"]],
+  },
 ];
 
 // Not a mutation to catch - a control. It applies the same wall typo to the

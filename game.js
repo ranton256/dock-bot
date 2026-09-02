@@ -145,6 +145,136 @@ function playMoves(state, moves) {
   return [...String(moves)].reduce((current, ch) => step(current, ch), state);
 }
 
+// --- Searching and generating ------------------------------------------------
+
+const COLS_INNER = COLS - 1;
+const ROWS_INNER = ROWS - 1;
+
+const SOLVER_CAP = 200000;   // positions; past this a board counts as unsolvable
+const CANDIDATE_CAP = 200;   // boards tried per generateLevel call
+const DIFFICULTY_FLOOR = 12; // shortest solution, in moves
+const CRATE_COUNT = 3;
+
+// A position is the crates plus where the bot stands. Deduplicating on it is the
+// difference between a search that finishes and one that does not.
+const positionKey = (state) =>
+  [...state.crates].sort().join('|') + '#' + state.bot.col + ',' + state.bot.row;
+
+// Breadth-first, so the first solution reached is a shortest one. That matters
+// twice over: the length is the board's par, and it is the difficulty test that
+// decides whether a generated board is worth playing. A merely-valid solution
+// would quietly corrupt both.
+function solve(state) {
+  if (isSolved(state)) return '';
+
+  const seen = new Set([positionKey(state)]);
+  let frontier = [{ state, path: '' }];
+  let examined = 0;
+
+  while (frontier.length > 0) {
+    const next = [];
+    for (const node of frontier) {
+      for (const dir of 'UDLR') {
+        const moved = step(node.state, dir);
+        if (moved === node.state) continue;
+
+        const key = positionKey(moved);
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const path = node.path + dir;
+        if (isSolved(moved)) return path;
+
+        // The caller is a key press. An unbounded search is a hung page, and the
+        // honest answer for "not found within budget" is the same as for "none
+        // exists": the board is not offered either way.
+        if (++examined >= SOLVER_CAP) return null;
+
+        next.push({ state: moved, path });
+      }
+    }
+    frontier = next;
+  }
+
+  return null;
+}
+
+// Determinism is the requirement here, not statistical quality: a board only has
+// to look arbitrary to a person. Carried explicitly rather than held in module
+// state, so generateLevel stays a pure function of its seed.
+const makeRandom = (seed) => {
+  let value = (seed >>> 0) || 1;
+  return () => {
+    value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+};
+
+const interiorCells = () => {
+  const cells = [];
+  for (let row = 1; row < ROWS_INNER; row++) {
+    for (let col = 1; col < COLS_INNER; col++) cells.push([col, row]);
+  }
+  return cells;
+};
+
+// One candidate: the outer ring, then crates, pads and the bot on distinct
+// interior cells. No crate starts on a pad - a board that begins partly solved is
+// a board that was partly not generated.
+const candidateBoard = (random) => {
+  const cells = interiorCells();
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    const swap = cells[i]; cells[i] = cells[j]; cells[j] = swap;
+  }
+
+  const grid = [];
+  for (let row = 0; row < ROWS; row++) {
+    const line = [];
+    for (let col = 0; col < COLS; col++) {
+      const edge = row === 0 || row === ROWS_INNER || col === 0 || col === COLS_INNER;
+      line.push(edge ? '#' : '.');
+    }
+    grid.push(line);
+  }
+
+  let taken = 0;
+  for (let i = 0; i < CRATE_COUNT; i++) { const [c, r] = cells[taken++]; grid[r][c] = 'C'; }
+  for (let i = 0; i < CRATE_COUNT; i++) { const [c, r] = cells[taken++]; grid[r][c] = 'P'; }
+  const [bc, br] = cells[taken++];
+  grid[br][bc] = 'B';
+
+  return grid.map((line) => line.join('')).join('\n');
+};
+
+// Draw candidates until one is solvable and no easier than the floor. Solvability
+// is established by evidence - a solution in hand - never by trusting the way the
+// board was built.
+// Returns { text, seed, par }, not bare level text: par comes from the search
+// that accepted the board, and throwing it away would mean searching the same
+// board twice.
+//
+// `floor` and `maxCandidates` exist only so a test can reach the giving-up path,
+// which is otherwise unreachable - with the real floor a board is accepted after
+// about eight candidates, so the cap of 200 never binds. Nothing in the game
+// passes either.
+function generateLevel(seed, options) {
+  const floor = (options && options.floor) || DIFFICULTY_FLOOR;
+  const cap = (options && options.maxCandidates) || CANDIDATE_CAP;
+  const random = makeRandom(seed);
+
+  for (let attempt = 0; attempt < cap; attempt++) {
+    const text = candidateBoard(random);
+    const solution = solve(parseLevel(text));
+    if (solution === null || solution.length < floor) continue;
+    return { text, seed, par: solution.length };
+  }
+
+  // Bounded failure, reported as such. Returning the best of the rejects would be
+  // returning a board the acceptance rules refused.
+  return null;
+}
+
 // --- Seam: browser shell goes below here ------------------------------------
 
 // Everything below is the browser shell. Guarded on a document existing, which
@@ -180,6 +310,7 @@ if (typeof document !== 'undefined') {
 
   const canvas = document.getElementById('board');
   const hud = document.getElementById('hud');
+  const boardLine = document.getElementById('boardline');
   const context = canvas.getContext('2d');
 
   // Governs how the atlas is magnified into the canvas. The canvas element being
@@ -187,7 +318,14 @@ if (typeof document !== 'undefined') {
   context.imageSmoothingEnabled = false;
 
   const atlas = new Image();
-  let state = parseLevel(LEVEL);
+
+  // The board currently being played, kept so that a restart can restore *this*
+  // board rather than a different one. Par is computed once, here, rather than on
+  // every draw: drawing happens on each key press that changes something, and
+  // re-running the search each time would put tens of milliseconds into a keystroke
+  // to recompute a constant.
+  let board = { text: LEVEL, seed: null, par: solve(parseLevel(LEVEL)).length };
+  let state = parseLevel(board.text);
 
   function drawFrame(name, col, row) {
     const cell = FRAME[name];
@@ -216,6 +354,9 @@ if (typeof document !== 'undefined') {
     drawFrame(BOT_FRAME[current.bot.facing], current.bot.col, current.bot.row);
 
     hud.textContent = isSolved(current) ? solvedMessage(current.moves) : 'Moves: ' + current.moves;
+    boardLine.textContent = board.seed === null
+      ? 'Par ' + board.par
+      : 'Seed ' + board.seed + ' \u00b7 Par ' + board.par;
   }
 
   function onKeyDown(event) {
@@ -229,7 +370,23 @@ if (typeof document !== 'undefined') {
 
     if (event.key === 'r' || event.key === 'R') {
       event.preventDefault();
-      state = parseLevel(LEVEL);
+      // The board currently being played, not the hand-authored one. Restarting is
+      // how a player retries a puzzle they have just understood; handing them a
+      // different puzzle instead destroys the thing they were about to use.
+      state = parseLevel(board.text);
+      draw(state);
+      return;
+    }
+
+    if (event.key === 'n' || event.key === 'N') {
+      event.preventDefault();
+      // The one unseeded moment in the game, in the half that is already impure.
+      // Everything after this is determined by the seed.
+      const generated = generateLevel(Date.now() >>> 0);
+      // Giving up leaves the player on the board they already had.
+      if (generated === null) return;
+      board = generated;
+      state = parseLevel(board.text);
       draw(state);
       return;
     }
@@ -262,5 +419,9 @@ if (typeof document !== 'undefined') {
 // Guarded so the browser ignores it and Node can import the core. A plain script
 // tag leaves `module` undefined, so this block simply does not run there.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { LEVEL, parseLevel, step, isSolved, renderText, playMoves };
+  module.exports = {
+    LEVEL, parseLevel, step, isSolved, renderText, playMoves,
+    solve, generateLevel,
+    SOLVER_CAP, CANDIDATE_CAP, DIFFICULTY_FLOOR, CRATE_COUNT,
+  };
 }

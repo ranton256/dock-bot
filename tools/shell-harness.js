@@ -19,6 +19,7 @@ const ROOT = process.argv[2] || path.join(__dirname, '..');
 function makeShell() {
   const draws = [];
   let hudText = 'Moves: 0';
+  let boardLineText = '';
   let cleared = 0;
   let keyHandler = null;
   let loadHandler = null;
@@ -36,9 +37,13 @@ function makeShell() {
 
   const canvas = { width: 384, height: 288, getContext: () => context };
   const hud = { set textContent(v) { hudText = v; }, get textContent() { return hudText; } };
+  const boardLine = { set textContent(v) { boardLineText = v; }, get textContent() { return boardLineText; } };
 
   const sandbox = {
-    document: { getElementById: (id) => (id === 'board' ? canvas : id === 'hud' ? hud : null) },
+    document: {
+      getElementById: (id) =>
+        id === 'board' ? canvas : id === 'hud' ? hud : id === 'boardline' ? boardLine : null,
+    },
     window: { addEventListener: (type, fn) => { if (type === 'keydown') keyHandler = fn; } },
     Image: function () {
       this.addEventListener = (type, fn) => { if (type === 'load') loadHandler = fn; };
@@ -51,7 +56,8 @@ function makeShell() {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'game.js'), 'utf8'), sandbox);
 
   const api = {
-    draws, get hud() { return hudText; }, get cleared() { return cleared; },
+    draws, get hud() { return hudText; }, get boardLine() { return boardLineText; },
+    get cleared() { return cleared; },
     get smoothing() { return smoothing; }, get atlasSrc() { return atlasSrc; },
     get hasKeyHandler() { return keyHandler !== null; },
     load: () => loadHandler(),
@@ -228,6 +234,67 @@ ok('the display tracks the counter and the solved message carries a real em dash
   assert.strictEqual(s.hud, 'Solved in 15 moves — press R');
   assert.ok(s.hud.includes('—'), 'U+2014 EM DASH, not a hyphen');
   assert.ok(!/[�?]/.test(s.hud), 'no replacement characters');
+});
+
+// --- generated boards -------------------------------------------------------
+
+ok('the board line shows par on the hand-authored level', () => {
+  const s = makeShell();
+  s.load();
+  assert.strictEqual(s.hud, 'Moves: 0');
+  assert.strictEqual(s.boardLine, 'Par 15', 'the hand-authored level has no seed');
+});
+
+ok('N produces a generated board with its seed and par', () => {
+  const s = makeShell();
+  s.load();
+  s.press('n');
+  assert.strictEqual(s.hud, 'Moves: 0');
+  assert.match(s.boardLine, /^Seed \d+ \u00b7 Par (\d+)$/, 'seed and par are both shown');
+  const par = Number(s.boardLine.match(/Par (\d+)$/)[1]);
+  assert.ok(par >= 12, `par ${par} should meet the difficulty floor`);
+});
+
+ok('N works on a solved board, which is when you most want it', () => {
+  const s = makeShell();
+  s.load();
+  const map = { U: 'ArrowUp', D: 'ArrowDown', L: 'ArrowLeft', R: 'ArrowRight' };
+  'UURDLDRDRRUURUL'.split('').forEach((c) => s.press(map[c]));
+  assert.match(s.hud, /^Solved in 15 moves/);
+  s.press('N');
+  assert.strictEqual(s.hud, 'Moves: 0');
+  assert.match(s.boardLine, /^Seed \d+/);
+});
+
+ok('R on a generated board brings back that same board', () => {
+  const s = makeShell();
+  s.load();
+  s.press('n');
+  const line = s.boardLine;
+  s.reset();
+  s.press('ArrowUp'); s.press('ArrowDown');
+  s.press('r');
+  assert.strictEqual(s.hud, 'Moves: 0');
+  assert.strictEqual(s.boardLine, line, 'the seed and par must be unchanged by a restart');
+});
+
+ok('the board a seed names is the board on screen', () => {
+  const { generateLevel } = require(path.join(ROOT, 'game.js'));
+  const s = makeShell();
+  s.load();
+  s.press('n');
+  const [, seed, par] = s.boardLine.match(/^Seed (\d+) \u00b7 Par (\d+)$/);
+  const regenerated = generateLevel(Number(seed));
+  assert.strictEqual(regenerated.par, Number(par), 'regenerating from the shown seed gives the same board');
+});
+
+ok('modifier combinations do not trigger a new board', () => {
+  const s = makeShell();
+  s.load();
+  assert.strictEqual(s.boardLine, 'Par 15');
+  s.press('n', { metaKey: true });
+  s.press('n', { ctrlKey: true });
+  assert.strictEqual(s.boardLine, 'Par 15', 'Cmd+N should still open a browser window');
 });
 
 console.log(`\nshell harness: ${checks} checks passed`);

@@ -6,7 +6,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const { LEVEL, parseLevel, step, isSolved, renderText, playMoves } = require('./game.js');
+const {
+  LEVEL, parseLevel, step, isSolved, renderText, playMoves,
+  solve, generateLevel, DIFFICULTY_FLOOR, CRATE_COUNT,
+} = require('./game.js');
 
 // Transcribed by hand from the specification, deliberately not imported.
 //
@@ -88,7 +91,7 @@ test('Importing the core outside a browser: the export block is inert in a brows
   assert.doesNotThrow(() => vm.runInContext(source, sandbox));
   assert.deepStrictEqual(
     Object.keys(sandbox).sort(),
-    ['isSolved', 'parseLevel', 'playMoves', 'renderText', 'step']
+    ['generateLevel', 'isSolved', 'parseLevel', 'playMoves', 'renderText', 'solve', 'step']
   );
 });
 
@@ -394,6 +397,114 @@ test('Restarting (core half): partway through a game', () => {
   assert.strictEqual(renderText(restarted), MAP);
 });
 
+// --- 7. Searching ---------------------------------------------------------------
+
+test('Solving finds the shortest solution, not merely a solution', () => {
+  const solution = solve(fresh());
+  assert.strictEqual(solution.length, 15, 'the optimal length recorded in the spec');
+  assert.strictEqual(solution, SOLUTION);
+});
+
+test('a returned solution actually solves the board', () => {
+  const solution = solve(fresh());
+  assert.strictEqual(isSolved(playMoves(fresh(), solution)), true);
+});
+
+test('Solving gives up on an unsolvable board', () => {
+  // A crate shoved into a corner that is not a pad can never come out again.
+  const board = [
+    '########',
+    '#C.....#',
+    '#..B...#',
+    '#....P.#',
+    '#......#',
+    '########',
+  ].join('\n');
+  assert.strictEqual(solve(parseLevel(board)), null);
+});
+
+test('an already solved board needs no moves', () => {
+  assert.strictEqual(solve(parseLevel(SOLVED_BOARD)), '');
+});
+
+test('searching does not disturb the board it was given', () => {
+  const state = fresh();
+  const snapshot = renderText(state);
+  solve(state);
+  assert.strictEqual(renderText(state), snapshot);
+  assert.strictEqual(state.moves, 0);
+});
+
+// --- 8. Generating --------------------------------------------------------------
+
+// Generated once and shared: every assertion below inspects the same sample.
+// Regenerating per test is what pushed this suite past fifteen seconds.
+const SEEDS = [1, 7, 42, 101, 500, 1234, 20260902, 48213, 777777, 31415, 60, 99];
+const GENERATED = SEEDS.map((seed) => generateLevel(seed));
+
+test('A seed determines a board', () => {
+  for (const seed of [42, 48213]) {
+    const a = generateLevel(seed);
+    const b = generateLevel(seed);
+    assert.strictEqual(a.text, b.text, 'the same seed must give the same board');
+    assert.strictEqual(a.par, b.par);
+  }
+});
+
+test('different seeds give different boards', () => {
+  const distinct = new Set(GENERATED.map((g) => g.text));
+  assert.strictEqual(distinct.size, GENERATED.length, 'every seed gave its own board');
+});
+
+test('generated text is a valid level', () => {
+  for (const { text, seed } of GENERATED) {
+    assert.strictEqual(renderText(parseLevel(text)), text, `seed ${seed} must round-trip`);
+  }
+});
+
+test('Every generated board is solvable', () => {
+  for (const { text, seed } of GENERATED) {
+    const state = parseLevel(text);
+    const solution = solve(state);
+    assert.ok(solution !== null, `seed ${seed} produced an unsolvable board:\n${text}`);
+    assert.strictEqual(isSolved(playMoves(state, solution)), true, `seed ${seed}`);
+  }
+});
+
+test('Every generated board is worth playing', () => {
+  for (const { text, par, seed } of GENERATED) {
+    const state = parseLevel(text);
+    assert.strictEqual(state.crates.size, CRATE_COUNT, `seed ${seed}: crate count`);
+    assert.strictEqual(state.pads.size, CRATE_COUNT, `seed ${seed}: pad count`);
+    for (const cell of state.crates) {
+      assert.ok(!state.pads.has(cell), `seed ${seed}: a crate started on a pad`);
+    }
+    assert.strictEqual(isSolved(state), false, `seed ${seed}: board began solved`);
+    assert.ok(par >= DIFFICULTY_FLOOR, `seed ${seed}: par ${par} is below the floor`);
+    assert.strictEqual(solve(state).length, par, `seed ${seed}: par must be the shortest solution`);
+  }
+});
+
+test('generated boards use the outer wall ring and no interior walls', () => {
+  for (const { text, seed } of GENERATED) {
+    const rows = text.split('\n');
+    assert.strictEqual(rows.length, 6);
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        const edge = r === 0 || r === 5 || c === 0 || c === 7;
+        assert.strictEqual(rows[r][c] === '#', edge, `seed ${seed}: wall at (${c},${r})`);
+      }
+    }
+  }
+});
+
+test('Generation terminates', () => {
+  // No board on this size can need 999 moves, so every candidate is rejected and
+  // the cap is what stops it. A small cap keeps the suite quick; the real cap of
+  // 200 is never reached in play, which is why this path needs an override at all.
+  assert.strictEqual(generateLevel(1, { floor: 999, maxCandidates: 5 }), null);
+});
+
 // --- 7. Milestone verification ------------------------------------------------
 
 test('every specification scenario naming a core function has a test', () => {
@@ -411,6 +522,12 @@ test('every specification scenario naming a core function has a test', () => {
     'Replaying a move string',
     'Blocked moves inside a script',
     'A replay cannot count past the solve',
+    'A seed determines a board',
+    'Every generated board is solvable',
+    'Every generated board is worth playing',
+    'Solving finds the shortest solution',
+    'Solving gives up on an unsolvable board',
+    'Generation terminates',
   ];
   for (const name of scenarios) {
     assert.ok(

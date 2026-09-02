@@ -71,6 +71,7 @@ function check(name, actual, expected, note) {
   await page.waitForTimeout(500);
 
   const hud = () => page.evaluate(() => document.getElementById('hud').textContent);
+  const boardLine = () => page.evaluate(() => document.getElementById('boardline').textContent);
   const canvas = page.locator('#board');
   const press = async (k) => page.keyboard.press(k);
   const ARROW = { U: 'ArrowUp', D: 'ArrowDown', L: 'ArrowLeft', R: 'ArrowRight' };
@@ -136,6 +137,26 @@ function check(name, actual, expected, note) {
   // 7.6 restart from a solved board
   await press('R');
   check('7.6 R restarts from a solved board', await hud(), 'Moves: 0');
+
+  // Generated boards
+  check('the board line shows par on the hand-authored level', await boardLine(), 'Par 15');
+
+  await press('n');
+  await page.waitForFunction(() => /^Seed /.test(document.getElementById('boardline').textContent), null, { timeout: 5000 });
+  const generated = await boardLine();
+  check('N gives a generated board', await hud(), 'Moves: 0');
+  check('the board line names seed and par', /^Seed \d+ \u00b7 Par \d+$/.test(generated), true, generated);
+  check('the generated board meets the difficulty floor',
+    Number(generated.match(/Par (\d+)$/)[1]) >= 12, true);
+  await canvas.screenshot({ path: path.join(SHOTS, 'generated.png') });
+
+  await press('ArrowUp'); await press('ArrowDown'); await press('r');
+  check('R on a generated board keeps that board', await boardLine(), generated);
+  check('R on a generated board resets the counter', await hud(), 'Moves: 0');
+
+  await press('n');
+  await page.waitForTimeout(800);
+  check('a second N gives a different board', (await boardLine()) !== generated, true);
 
   check('no console messages for the whole run', consoleMessages, []);
   check('no page errors for the whole run', pageErrors, []);
