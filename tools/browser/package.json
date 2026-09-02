@@ -1,0 +1,11 @@
+{
+  "name": "dock-bot-browser-checks",
+  "private": true,
+  "description": "Browser acceptance checks. Isolated here so the repository root stays free of a package.json, which would change how game.js is resolved.",
+  "scripts": {
+    "checklist": "node checklist.js"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.0"
+  }
+}
