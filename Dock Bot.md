@@ -76,13 +76,14 @@ art rather than guessed at.
 | Tile / board | 16 px · 8 columns × 6 rows | column 0 left, row 0 top |
 | Scale / canvas | ×3 · 384 × 288 px | the HUD is a DOM element below the canvas |
 | Board line | a second DOM element below the HUD | `Par 15` on the hand-authored level, `Seed <s> · Par <p>` on a generated one |
+| Key legend | static text below the board line | `Arrows move · R restart · N new board`; nothing else on the page tells a player that N exists |
 | Bot spawn | column 1, row 3, facing right | the `B` in the level map |
 | Move keys | ArrowUp, ArrowDown, ArrowLeft, ArrowRight | one cell per press; no repeat while held |
 | Restart key | R | any state; restores the *current* board, generated or not; ignore presses carrying Ctrl, Cmd or Alt, so Cmd+R still reloads |
 | New board key | N | any state; takes a fresh seed and generates a board |
 | Generated board | 3 crates, 3 pads, bot | the outer wall ring only, no interior walls |
 | Difficulty floor | shortest solution ≥ 12 moves | a board below it is rejected and another generated |
-| Candidate cap | 200 boards per press | give up rather than loop forever |
+| Candidate cap | 60 boards per press | give up rather than loop forever; about eight are needed in practice, so this is ample headroom, and it bounds a failed press near 0.7 s where 200 would allow 2.3 s |
 | Solver cap | 200 000 states | past that, treat the board as unsolvable |
 | Move counter | starts at 0, +1 per successful move | a push is one move; a blocked press is zero |
 | Optimal solution | 15 moves: `UURDLDRDRRUURUL` | used by the scripted playtest |
@@ -111,7 +112,8 @@ template literal and fails against output that never had one.
 1. **Stack:** HTML5 canvas 2D and the DOM only. No framework, library, CDN, transpiler, or package manager. Node 20+ for tests. Do not add a `package.json` either: its absence is what keeps `.js` resolving as CommonJS, and therefore what lets `test.js` call `require('./game.js')`. Running `npm init` will break the test suite in a way that looks nothing like its cause.
 2. **Files:** exactly `index.html`, `style.css`, `game.js`, `test.js`, and `assets/dock_bot.png`. No `<script type="module">` and no runtime `fetch`; both are blocked over `file://`. The atlas loads through an `<img>` element.
 3. **Architecture:** `game.js` is a pure core plus a thin browser shell. Core: `parseLevel(text)`, `step(state, dir)`, `isSolved(state)`, `renderText(state)`, `playMoves(state, moves)`, `generateLevel(seed)`, `solve(state)`; none touch the DOM, and `step` returns a new state without mutating its input. Shell: canvas, key listener, HUD elements, `draw(state)`.
-   `generateLevel` returns *level text* in the §3 format, which `parseLevel` already consumes, so generation joins the existing pipeline at one seam and changes nothing downstream of it.
+   `generateLevel` returns the board it made: the **level text** in the §3 format, which `parseLevel` already consumes, together with the **seed** and the board's **par**. It cannot usefully return the text alone — par comes out of the search that accepted the board, and discarding it means searching the same board a second time to put par on screen. Generation therefore joins the existing pipeline at one seam and changes nothing downstream of it.
+   It also accepts optional overrides for the difficulty floor and the candidate cap. These exist solely so that the giving-up path below can be reached from a test: with the real floor a board is accepted after about eight candidates, so the cap never binds and that path is otherwise unreachable. Nothing in the game passes them.
 4. **No animation loop.** No `requestAnimationFrame`. The shell draws once after the atlas loads and once after every key event that changes state.
 5. **Coordinates:** cells are `(col, row)` integers, origin top-left, exclusive upper bounds (`0 ≤ col < 8`, `0 ≤ row < 6`). Screen position is `col*16*3, row*16*3`.
 6. **Randomness:** seeded only. A **seed plus a key sequence** fully determines everything — the board and the play on it. Where the seed itself comes from is unconstrained (a clock is fine), but once chosen nothing may consult an unseeded source again. The point is unchanged from having no randomness at all: any position must be reproducible from a short description, which is what keeps the game testable and a bug report actionable.
@@ -234,8 +236,8 @@ Scenario: Draw order
 Scenario: A seed determines a board
   Given any seed
   When generateLevel is called with that seed twice
-  Then both calls return exactly the same level text
-  And parseLevel accepts it
+  Then both calls return exactly the same level text and the same par
+  And parseLevel accepts that text
 
 Scenario: Every generated board is solvable
   Given any seed
@@ -260,9 +262,10 @@ Scenario: Solving gives up on an unsolvable board
   Then it returns nothing, without exceeding the solver cap
 
 Scenario: Generation terminates
-  Given a seed for which acceptable boards are scarce
+  Given a difficulty floor no board can meet, which is how a test reaches this path
   When generateLevel has tried the candidate cap without success
-  Then it gives up rather than looping, and the game keeps the board it already had
+  Then it returns nothing rather than looping, and rather than the best of the rejects
+  And the game keeps the board it already had
 
 Scenario: Asking for a new board
   Given the game is in any state, solved or not
