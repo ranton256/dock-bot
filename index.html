@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dock Bot</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <canvas id="board" width="384" height="288"></canvas>
+  <p id="hud">Moves: 0</p>
+</main>
+<!-- A plain script tag, not a module: modules are blocked over file://.
+     Placed at the end of the body so the canvas and the display exist by the
+     time the shell looks them up. -->
+<script src="game.js"></script>
+</body>
+</html>

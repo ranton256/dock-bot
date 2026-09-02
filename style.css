@@ -1,0 +1,40 @@
+/* Colours are the atlas palette, so the page frames the art rather than
+   competing with it. */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #16202b;
+  color: #a8f0ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+main {
+  text-align: center;
+}
+
+canvas {
+  display: block;
+  border: 1px solid #0d1117;
+
+  /* Deliberately no width or height here. The canvas must display at its
+     intrinsic 384x288; styling it to any other size would resample it.
+     `pixelated` covers the second scaling stage that catches people out:
+     disabling smoothing on the drawing context governs how the atlas is
+     magnified into the canvas, but says nothing about the browser resampling
+     the finished canvas element under zoom or on a high-density display. */
+  image-rendering: pixelated;
+}
+
+#hud {
+  margin: 12px 0 0;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}

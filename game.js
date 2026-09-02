@@ -147,6 +147,118 @@ function playMoves(state, moves) {
 
 // --- Seam: browser shell goes below here ------------------------------------
 
+// Everything below is the browser shell. Guarded on a document existing, which
+// is the same seam the export block guards from the other side: test.js imports
+// this file under Node, where touching `document` would throw at import time and
+// take the whole suite down with it.
+//
+// There are no rules down here. The shell binds keys to `step`, draws state, and
+// formats two strings; anything that decides what a move *means* belongs above.
+if (typeof document !== 'undefined') {
+  const TILE = 16;
+  const SCALE = 3;
+  const SIZE = TILE * SCALE;
+
+  // The atlas cell for each frame. Source rectangles are derived from this
+  // rather than written out four numbers at a time: nine frames times four
+  // hand-written coordinates is thirty-six chances to transpose a digit, and a
+  // transposed rectangle draws a wrong-looking tile rather than raising.
+  const FRAME = {
+    bot_up: [0, 0], bot_down: [1, 0], bot_left: [2, 0], bot_right: [3, 0],
+    crate: [0, 1], crate_docked: [1, 1],
+    floor: [2, 1], wall: [3, 1], pad: [0, 2],
+  };
+
+  const BOT_FRAME = { U: 'bot_up', D: 'bot_down', L: 'bot_left', R: 'bot_right' };
+  const ARROWS = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R' };
+
+  // The em dash is written as an escape rather than as a literal character. A
+  // script loaded from file:// inherits the document's encoding, so declaring
+  // UTF-8 fixes the common case; this makes the string survive even a file saved
+  // in the wrong encoding.
+  const solvedMessage = (moves) => 'Solved in ' + moves + ' moves \u2014 press R';
+
+  const canvas = document.getElementById('board');
+  const hud = document.getElementById('hud');
+  const context = canvas.getContext('2d');
+
+  // Governs how the atlas is magnified into the canvas. The canvas element being
+  // resampled by the browser is a separate stage, handled in style.css.
+  context.imageSmoothingEnabled = false;
+
+  const atlas = new Image();
+  let state = parseLevel(LEVEL);
+
+  function drawFrame(name, col, row) {
+    const cell = FRAME[name];
+    context.drawImage(
+      atlas,
+      cell[0] * TILE, cell[1] * TILE, TILE, TILE,
+      col * SIZE, row * SIZE, SIZE, SIZE
+    );
+  }
+
+  function draw(current) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const cell = key(col, row);
+        drawFrame(current.walls.has(cell) ? 'wall' : current.pads.has(cell) ? 'pad' : 'floor', col, row);
+      }
+    }
+
+    for (const cell of current.crates) {
+      const parts = cell.split(',');
+      drawFrame(current.pads.has(cell) ? 'crate_docked' : 'crate', Number(parts[0]), Number(parts[1]));
+    }
+
+    drawFrame(BOT_FRAME[current.bot.facing], current.bot.col, current.bot.row);
+
+    hud.textContent = isSolved(current) ? solvedMessage(current.moves) : 'Moves: ' + current.moves;
+  }
+
+  function onKeyDown(event) {
+    // Browsers stream key events while a key is held down; only the first is a
+    // press. Without this one press would run the bot across the board.
+    if (event.repeat) return;
+
+    // Leave shortcuts alone. Reload is Ctrl+R or Cmd+R, and hijacking it would
+    // be a worse bug than any it could fix.
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+    if (event.key === 'r' || event.key === 'R') {
+      event.preventDefault();
+      state = parseLevel(LEVEL);
+      draw(state);
+      return;
+    }
+
+    const dir = ARROWS[event.key];
+    if (!dir) return; // every other key is inert, and nothing is redrawn
+
+    event.preventDefault(); // arrows would otherwise scroll the page under the board
+
+    // Reference inequality is an exact "did anything change": the core returns
+    // the identical object only for a press after a solve, and a new one for
+    // everything else including a blocked press that merely turns the bot.
+    const next = step(state, dir);
+    if (next !== state) {
+      state = next;
+      draw(state);
+    }
+  }
+
+  atlas.addEventListener('load', function () {
+    draw(state);
+    // Registered here rather than at parse time so that "never draw before the
+    // atlas is ready" is structural instead of a flag to remember to check.
+    window.addEventListener('keydown', onKeyDown);
+  });
+
+  atlas.src = 'assets/dock_bot.png';
+}
+
 // Guarded so the browser ignores it and Node can import the core. A plain script
 // tag leaves `module` undefined, so this block simply does not run there.
 if (typeof module !== 'undefined' && module.exports) {
