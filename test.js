@@ -330,7 +330,7 @@ test('Replaying a move string: the canonical solution', () => {
   assert.strictEqual(renderText(after), SOLVED_BOARD);
 });
 
-test('replay cannot count past a solve', () => {
+test('A replay cannot count past the solve', () => {
   const solved = playMoves(fresh(), SOLUTION);
   const overrun = playMoves(fresh(), SOLUTION + 'UUDDLLRR');
   assert.strictEqual(overrun.moves, 15);
@@ -410,6 +410,7 @@ test('every specification scenario naming a core function has a test', () => {
     'Restarting',
     'Replaying a move string',
     'Blocked moves inside a script',
+    'A replay cannot count past the solve',
   ];
   for (const name of scenarios) {
     assert.ok(
