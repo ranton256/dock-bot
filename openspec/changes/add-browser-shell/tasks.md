@@ -23,12 +23,12 @@
 
 ## 3. Atlas loading and first draw
 
-- [ ] 3.1 Load the atlas through an `<img>` element and perform the first draw inside its
+- [x] 3.1 Load the atlas through an `<img>` element and perform the first draw inside its
       load handler. Verify the board appears when the page is opened from `file://` with no
       server running.
 - [x] 3.2 Attach the key listener inside the same load handler. Verify that a key pressed
       before the atlas resolves produces no blank or partially drawn board.
-- [ ] 3.3 Verify no request is made other than the atlas, using the browser's network panel,
+- [x] 3.3 Verify no request is made other than the atlas, using the browser's network panel,
       and that no fetch or module import appears anywhere in the sources.
 
 ## 4. Drawing
@@ -73,15 +73,15 @@
 
 ## 7. Checklist verification from `file://`
 
-- [ ] 7.1 Verify the game opens with no console errors and the display reads `Moves: 0`.
-- [ ] 7.2 Verify pixels are crisp at scale 3, checking on a high-density display or under
+- [x] 7.1 Verify the game opens with no console errors and the display reads `Moves: 0`.
+- [x] 7.2 Verify pixels are crisp at scale 3, checking on a high-density display or under
       browser zoom as well as at ordinary scale — the context smoothing flag alone does not
       cover the element being resampled by the compositor.
-- [ ] 7.3 Verify one cell of movement per arrow press, with no repeat while a key is held.
-- [ ] 7.4 Verify a crate seated on a pad glows and is obviously distinct from one on floor.
-- [ ] 7.5 Verify solving the level freezes the arrows — no movement, no counter change, no
+- [x] 7.3 Verify one cell of movement per arrow press, with no repeat while a key is held.
+- [x] 7.4 Verify a crate seated on a pad glows and is obviously distinct from one on floor.
+- [x] 7.5 Verify solving the level freezes the arrows — no movement, no counter change, no
       turning — and shows the solved message.
-- [ ] 7.6 Verify `R` restarts from any state with the counter back at 0.
-- [ ] 7.7 Play the canonical 15-move solution `UURDLDRDRRUURUL` by hand and verify the game
+- [x] 7.6 Verify `R` restarts from any state with the counter back at 0.
+- [x] 7.7 Play the canonical 15-move solution `UURDLDRDRRUURUL` by hand and verify the game
       solves with the display reading `Solved in 15 moves — press R`, matching what the core's
       replay test already asserts headlessly.
