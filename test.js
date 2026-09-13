@@ -2,7 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert').strict;
-const { LEVEL_TEXT, parseLevel, renderText, step, isSolved, playMoves } = require('./game.js');
+const {
+  LEVEL_TEXT, parseLevel, renderText, step, isSolved, playMoves, solve, generateLevel,
+} = require('./game.js');
 
 const EXPECTED_LEVEL = [
   '########',
@@ -295,4 +297,39 @@ test('playMoves preserves blocked semantics and input purity', () => {
   assert.equal(result.moves, 0);
   assert.deepEqual(state, before);
   assert.deepEqual(result, playMoves(state, 'LLL'));
+});
+
+test('solve returns the canonical shortest hand-level solution', () => {
+  assert.equal(solve(parseLevel(LEVEL_TEXT)), 'UURDLDRDRRUURUL');
+});
+
+test('solve returns no solution for a crate trapped in a corner', () => {
+  const state = parseLevel([
+    '#####',
+    '#CBP#',
+    '#...#',
+    '#...#',
+    '#####',
+  ].join('\n'));
+  assert.equal(solve(state), undefined);
+});
+
+test('generated boards are deterministic, valid, and replayable', () => {
+  const first = generateLevel(42);
+  const second = generateLevel(42);
+  assert.deepEqual(first, second);
+  assert.ok(first);
+  assert.equal(first.seed, 42);
+  assert.ok(first.par >= 12);
+  const state = parseLevel(first.text);
+  assert.equal(state.crates.length, 3);
+  assert.equal(state.terrain.flat().filter((cell) => cell === 'P').length, 3);
+  assert.equal(state.terrain.flat().filter((cell) => cell === '#').length, 24);
+  assert.ok(state.crates.every(({ col, row }) => state.terrain[row][col] !== 'P'));
+  assert.equal(solve(state).length, first.par);
+  assert.equal(isSolved(playMoves(state, solve(state))), true);
+});
+
+test('generation honors a candidate cap and can fail cleanly', () => {
+  assert.equal(generateLevel(42, { minimumPar: 999, candidateCap: 1 }), undefined);
 });

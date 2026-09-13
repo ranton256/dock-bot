@@ -97,6 +97,76 @@ function playMoves(state, moves) {
   return result;
 }
 
+function solve(state, { maxStates = 200000 } = {}) {
+  if (isSolved(state)) return '';
+  const key = (candidate) => {
+    const crates = candidate.crates
+      .map(({ col, row }) => `${col},${row}`)
+      .sort()
+      .join(';');
+    return `${candidate.bot.col},${candidate.bot.row}|${crates}`;
+  };
+  const queue = [{ state, moves: '' }];
+  const visited = new Set([key(state)]);
+  let index = 0;
+  const directions = [['U', 'up'], ['D', 'down'], ['L', 'left'], ['R', 'right']];
+  while (index < queue.length && visited.size <= maxStates) {
+    const current = queue[index++];
+    for (const [letter, direction] of directions) {
+      const next = step(current.state, direction);
+      if (next.moves === current.state.moves) continue;
+      const nextKey = key(next);
+      if (visited.has(nextKey)) continue;
+      if (isSolved(next)) return current.moves + letter;
+      visited.add(nextKey);
+      if (visited.size >= maxStates) return undefined;
+      queue.push({ state: next, moves: current.moves + letter });
+    }
+  }
+  return undefined;
+}
+
+function generateLevel(seed, options = {}) {
+  const minimumPar = options.minimumPar ?? 12;
+  const candidateCap = options.candidateCap ?? 60;
+  const normalizedSeed = Number(seed) >>> 0;
+  let randomState = normalizedSeed || 1;
+  const random = () => {
+    randomState ^= randomState << 13;
+    randomState ^= randomState >>> 17;
+    randomState ^= randomState << 5;
+    return (randomState >>> 0) / 0x100000000;
+  };
+  const interior = [];
+  for (let row = 1; row < 5; row += 1) {
+    for (let col = 1; col < 7; col += 1) interior.push({ col, row });
+  }
+  for (let candidate = 0; candidate < candidateCap; candidate += 1) {
+    const cells = interior.slice();
+    const chosen = [];
+    while (chosen.length < 7) {
+      const index = Math.floor(random() * cells.length);
+      chosen.push(cells.splice(index, 1)[0]);
+    }
+    const bot = chosen[0];
+    const pads = chosen.slice(1, 4);
+    const crates = chosen.slice(4);
+    const rows = [];
+    for (let row = 0; row < 6; row += 1) {
+      const line = Array.from({ length: 8 }, (_, col) =>
+        row === 0 || row === 5 || col === 0 || col === 7 ? '#' : '.');
+      rows.push(line);
+    }
+    for (const { col, row } of pads) rows[row][col] = 'P';
+    for (const { col, row } of crates) rows[row][col] = 'C';
+    rows[bot.row][bot.col] = 'B';
+    const text = rows.map((row) => row.join('')).join('\n');
+    const par = solve(parseLevel(text));
+    if (par !== undefined && par.length >= minimumPar) return { text, seed: normalizedSeed, par: par.length };
+  }
+  return undefined;
+}
+
 function renderText(state) {
   const rows = state.terrain.map((row) => row.slice());
   for (const { col, row } of state.crates) {
@@ -108,7 +178,7 @@ function renderText(state) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { LEVEL_TEXT, parseLevel, renderText, step, isSolved, playMoves };
+  module.exports = { LEVEL_TEXT, parseLevel, renderText, step, isSolved, playMoves, solve, generateLevel };
 }
 
 if (typeof document !== 'undefined') {
@@ -116,7 +186,8 @@ if (typeof document !== 'undefined') {
   const context = canvas.getContext('2d');
   const atlas = document.getElementById('atlas');
   const hud = document.getElementById('hud');
-  let state = parseLevel(LEVEL_TEXT);
+  let activeBoard = { text: LEVEL_TEXT, par: 15 };
+  let state = parseLevel(activeBoard.text);
   const arrowDirections = new Map([
     ['ArrowUp', 'up'],
     ['ArrowDown', 'down'],
@@ -154,14 +225,27 @@ if (typeof document !== 'undefined') {
     hud.textContent = state.solved
       ? `Solved in ${state.moves} moves — press R`
       : `Moves: ${state.moves}`;
+    document.getElementById('board-meta').textContent = activeBoard.seed === undefined
+      ? `Par ${activeBoard.par}`
+      : `Seed ${activeBoard.seed} · Par ${activeBoard.par}`;
   }
 
   function handleKeyDown(event) {
     const dir = arrowDirections.get(event.key);
     if (event.key === 'r' || event.key === 'R') {
       if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
-      state = parseLevel(LEVEL_TEXT);
+      state = parseLevel(activeBoard.text);
       draw(state);
+      return;
+    }
+    if (event.key === 'n' || event.key === 'N') {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+      const generated = generateLevel((Date.now() ^ Math.random() * 0x100000000) >>> 0);
+      if (generated) {
+        activeBoard = generated;
+        state = parseLevel(activeBoard.text);
+        draw(state);
+      }
       return;
     }
     if (!dir) return;
