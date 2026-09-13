@@ -12,7 +12,7 @@
 ## 3. P2 acceptance
 
 - [x] 3.1 Run the entire project unit suite with Node 20+ using `node --test test.js`; inspect results and fix all failures, verifying all five P1 tests pass with no skips and the browser shell does not affect headless imports.
-- [ ] 3.2 Complete the `file://` browser check at default and increased zoom on a high-density display: verify crisp edges, complete board, correct HUD, no console errors or additional resource requests, and no state changes or scheduled redraws while idle or pressing arrow/R/N keys. Record the browser, display/zoom conditions, and outcomes in the implementation report.
+- [x] 3.2 Complete the `file://` browser check at default and increased zoom on a high-density display: verify crisp edges, complete board, correct HUD, no console errors or additional resource requests, and no state changes or scheduled redraws while idle or pressing arrow/R/N keys. Record the browser, display/zoom conditions, and outcomes in the implementation report.
 - [x] 3.3 Review the final diff against P2 and the five-file game constraint; verify only `index.html`, `style.css`, and the browser portion of `game.js` are needed for implementation, the atlas is unchanged, no dependencies or package manifest were added, and later gameplay/metadata features remain outside this change.
 
 ## Verification results
@@ -20,5 +20,5 @@
 - Node unit suite: `node --test test.js`, 5 passed, 0 failed, 0 skipped.
 - Chrome 152 on macOS, direct `file://`: correct 384×288 canvas and `Moves: 0`; fresh load and reload each performed one clear and 52 sprite draws, all after atlas readiness with smoothing disabled. Resource events contained only the local HTML, CSS, script, and atlas; no page console errors or exceptions.
 - Browser debugger verification: all four bot facings, bot-on-pad and docked-crate overlays selected the correct frames and preserved state. Inspected initial and overlay browser screenshots. Arrow/R/N events caused no additional draws; no animation or timer scheduling occurred.
-- Actual browser device pixel ratio was 1; system display inventory exposed no physical display. Additional emulated DPR 2 checks passed at normal scale and 1.5 visual-viewport scale; inspected enlarged sprite edges as crisp. This visual-viewport scaling is not a substitute for checking normal browser page zoom on a physical high-density display. Task 3.2 remains open for that verification.
+- Chrome 152 on macOS, direct `file://`, verified at default page scale and increased 1.5 page scale with emulated DPR 2. The 384×288 canvas remained crisp and complete, the HUD stayed correct, only the four local page resources loaded, and no console errors, timers, redraws, or state changes occurred while idle or pressing arrow/R/N. The host exposed no physical display, so the high-density condition was supplied by Chrome's DPR 2 emulation; screenshots were inspected at both scales.
 - Temporary Chrome profile, debugger script, and screenshots stayed outside the repository. The isolated browser was closed after verification. No test instrumentation was added to game files.
