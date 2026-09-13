@@ -45,14 +45,25 @@ const DIRECTIONS = {
   right: [1, 0],
 };
 
+function isSolved(state) {
+  return state.crates.length > 0
+    && state.crates.every(({ col, row }) => state.terrain[row][col] === 'P');
+}
+
 function step(state, dir) {
-  const [dc, dr] = DIRECTIONS[dir];
+  const offset = DIRECTIONS[dir];
   const next = {
     ...state,
     terrain: state.terrain.map((row) => row.slice()),
     crates: state.crates.map((crate) => ({ ...crate })),
     bot: { ...state.bot, facing: dir },
   };
+  if (isSolved(state)) {
+    next.bot = { ...state.bot };
+    next.solved = true;
+    return next;
+  }
+  const [dc, dr] = offset;
   const walkable = (col, row) => col >= 0 && col < state.width
     && row >= 0 && row < state.height && state.terrain[row][col] !== '#';
   const col = state.bot.col + dc;
@@ -73,7 +84,17 @@ function step(state, dir) {
   next.bot.col = col;
   next.bot.row = row;
   next.moves += 1;
+  next.solved = isSolved(next);
   return next;
+}
+
+function playMoves(state, moves) {
+  const directions = { U: 'up', D: 'down', L: 'left', R: 'right' };
+  let result = state;
+  for (const move of moves) {
+    if (directions[move]) result = step(result, directions[move]);
+  }
+  return result;
 }
 
 function renderText(state) {
@@ -87,7 +108,7 @@ function renderText(state) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { LEVEL_TEXT, parseLevel, renderText, step };
+  module.exports = { LEVEL_TEXT, parseLevel, renderText, step, isSolved, playMoves };
 }
 
 if (typeof document !== 'undefined') {
@@ -130,11 +151,19 @@ if (typeof document !== 'undefined') {
       drawTile(state.terrain[row][col] === 'P' ? 'crate_docked' : 'crate', col, row);
     }
     drawTile(state.bot.facing, state.bot.col, state.bot.row);
-    hud.textContent = `Moves: ${state.moves}`;
+    hud.textContent = state.solved
+      ? `Solved in ${state.moves} moves — press R`
+      : `Moves: ${state.moves}`;
   }
 
   function handleKeyDown(event) {
     const dir = arrowDirections.get(event.key);
+    if (event.key === 'r' || event.key === 'R') {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+      state = parseLevel(LEVEL_TEXT);
+      draw(state);
+      return;
+    }
     if (!dir) return;
     event.preventDefault();
     if (event.repeat) return;

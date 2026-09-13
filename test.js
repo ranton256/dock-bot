@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert').strict;
-const { LEVEL_TEXT, parseLevel, renderText, step } = require('./game.js');
+const { LEVEL_TEXT, parseLevel, renderText, step, isSolved, playMoves } = require('./game.js');
 
 const EXPECTED_LEVEL = [
   '########',
@@ -96,6 +96,8 @@ test('core imports and runs without a browser', () => {
   assert.equal(typeof document, 'undefined');
   assert.equal(renderText(parseLevel(EXPECTED_LEVEL)), EXPECTED_LEVEL);
   assert.equal(step(parseLevel(EXPECTED_LEVEL), 'up').moves, 1);
+  assert.equal(typeof isSolved, 'function');
+  assert.equal(typeof playMoves, 'function');
 });
 
 function fixture(bot, crates = []) {
@@ -197,9 +199,13 @@ test('pushing onto and off pads preserves terrain and occupancy text', () => {
   assert.equal(docked.moves, 5);
   assert.deepEqual(docked.terrain, onto.terrain);
 
-  const off = fixture({ col: 3, row: 2 }, [{ col: 3, row: 3 }]);
+  const off = fixture({ col: 3, row: 2 }, [
+    { col: 3, row: 3 }, { col: 2, row: 2 }, { col: 4, row: 2 },
+  ]);
   const undocked = step(off, 'down');
-  assert.deepEqual(undocked.crates, [{ col: 3, row: 4 }]);
+  assert.deepEqual(undocked.crates, [
+    { col: 3, row: 4 }, { col: 2, row: 2 }, { col: 4, row: 2 },
+  ]);
   assert.deepEqual(undocked.bot, { col: 3, row: 3, facing: 'down' });
   assert.equal(renderText(undocked).split('\n')[3], '#..b...#');
   assert.equal(renderText(undocked).split('\n')[4], '#..C.P.#');
@@ -243,4 +249,50 @@ test('walks, pushes, and blocked attempts are immutable and deterministic', () =
     next.crates[0].row = 0;
     assert.deepEqual(state, before);
   }
+});
+
+test('isSolved checks crate membership on pads without mutation', () => {
+  const state = parseLevel(LEVEL_TEXT);
+  const solved = structuredClone(state);
+  solved.crates = [{ col: 3, row: 1 }, { col: 3, row: 3 }, { col: 5, row: 4 }];
+  solved.moves = 15;
+  const before = structuredClone(solved);
+  assert.equal(isSolved(state), false);
+  assert.equal(isSolved(solved), true);
+  assert.deepEqual(solved, before);
+});
+
+test('solved steps freeze even when the solved flag is stale', () => {
+  const state = parseLevel(LEVEL_TEXT);
+  state.crates = [{ col: 3, row: 1 }, { col: 3, row: 3 }, { col: 5, row: 4 }];
+  state.moves = 15;
+  state.solved = false;
+  state.bot = { col: 2, row: 3, facing: 'up' };
+  const next = step(state, 'down');
+  assert.deepEqual(next.bot, state.bot);
+  assert.equal(next.moves, 15);
+  assert.equal(next.solved, true);
+  assert.deepEqual(next.crates, state.crates);
+  assert.deepEqual(next.terrain, state.terrain);
+});
+
+test('playMoves replays the canonical solution and freezes after solve', () => {
+  const result = playMoves(parseLevel(LEVEL_TEXT), 'UURDLDRDRRUURULXYZUDLR');
+  assert.equal(isSolved(result), true);
+  assert.equal(result.solved, true);
+  assert.equal(result.moves, 15);
+  assert.equal(renderText(result), [
+    '########', '#..XB..#', '#......#', '#..X...#', '#....X.#', '########',
+  ].join('\n'));
+});
+
+test('playMoves preserves blocked semantics and input purity', () => {
+  const state = parseLevel(LEVEL_TEXT);
+  const before = structuredClone(state);
+  freezeDeep(state);
+  const result = playMoves(state, 'LLL');
+  assert.deepEqual(result.bot, { col: 1, row: 3, facing: 'left' });
+  assert.equal(result.moves, 0);
+  assert.deepEqual(state, before);
+  assert.deepEqual(result, playMoves(state, 'LLL'));
 });
