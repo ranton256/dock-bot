@@ -38,6 +38,44 @@ function parseLevel(text) {
   };
 }
 
+const DIRECTIONS = {
+  up: [0, -1],
+  down: [0, 1],
+  left: [-1, 0],
+  right: [1, 0],
+};
+
+function step(state, dir) {
+  const [dc, dr] = DIRECTIONS[dir];
+  const next = {
+    ...state,
+    terrain: state.terrain.map((row) => row.slice()),
+    crates: state.crates.map((crate) => ({ ...crate })),
+    bot: { ...state.bot, facing: dir },
+  };
+  const walkable = (col, row) => col >= 0 && col < state.width
+    && row >= 0 && row < state.height && state.terrain[row][col] !== '#';
+  const col = state.bot.col + dc;
+  const row = state.bot.row + dr;
+  if (!walkable(col, row)) return next;
+
+  const crateIndex = state.crates.findIndex((crate) => crate.col === col && crate.row === row);
+  if (crateIndex !== -1) {
+    const beyondCol = col + dc;
+    const beyondRow = row + dr;
+    if (!walkable(beyondCol, beyondRow)
+      || state.crates.some((crate) => crate.col === beyondCol && crate.row === beyondRow)) {
+      return next;
+    }
+    next.crates[crateIndex] = { col: beyondCol, row: beyondRow };
+  }
+
+  next.bot.col = col;
+  next.bot.row = row;
+  next.moves += 1;
+  return next;
+}
+
 function renderText(state) {
   const rows = state.terrain.map((row) => row.slice());
   for (const { col, row } of state.crates) {
@@ -49,7 +87,7 @@ function renderText(state) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { LEVEL_TEXT, parseLevel, renderText };
+  module.exports = { LEVEL_TEXT, parseLevel, renderText, step };
 }
 
 if (typeof document !== 'undefined') {
@@ -57,7 +95,13 @@ if (typeof document !== 'undefined') {
   const context = canvas.getContext('2d');
   const atlas = document.getElementById('atlas');
   const hud = document.getElementById('hud');
-  const state = parseLevel(LEVEL_TEXT);
+  let state = parseLevel(LEVEL_TEXT);
+  const arrowDirections = new Map([
+    ['ArrowUp', 'up'],
+    ['ArrowDown', 'down'],
+    ['ArrowLeft', 'left'],
+    ['ArrowRight', 'right'],
+  ]);
   const frames = {
     up: [0, 0],
     down: [1, 0],
@@ -89,7 +133,23 @@ if (typeof document !== 'undefined') {
     hud.textContent = `Moves: ${state.moves}`;
   }
 
-  // Register before assigning src so even a cached atlas uses this one draw path.
-  atlas.addEventListener('load', () => draw(state), { once: true });
+  function handleKeyDown(event) {
+    const dir = arrowDirections.get(event.key);
+    if (!dir) return;
+    event.preventDefault();
+    if (event.repeat) return;
+
+    const next = step(state, dir);
+    // Every successful move/push changes the counter; blocked turns change facing.
+    const changed = next.moves !== state.moves || next.bot.facing !== state.bot.facing;
+    state = next;
+    if (changed) draw(state);
+  }
+
+  // Enable input only after the initial board has been drawn with a ready atlas.
+  atlas.addEventListener('load', () => {
+    draw(state);
+    document.addEventListener('keydown', handleKeyDown);
+  }, { once: true });
   atlas.src = 'assets/dock_bot.png';
 }
