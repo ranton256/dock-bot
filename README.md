@@ -6,7 +6,8 @@ warehouse. Every crate on a pad solves the level. Nothing moves unless you move.
 There is one hand-authored level to learn on, and after that the game generates
 fresh boards on demand — each one checked to be solvable before you ever see it.
 
-This repo is your starting point. It contains the specification, not the game —
+This repo is your starting point — the first project in a spec-driven development
+course. It contains the specification, not the game, and it is plain JavaScript:
 you are going to write the game.
 
 ## Read this first
@@ -111,3 +112,10 @@ Do not redraw or replace it — the frame layout is hard-coded against it. Secti
 the spec maps every cell and, just as importantly, says which frames are opaque terrain
 and which are transparent-backed entities drawn over them. Read that before you write
 `draw`.
+
+## Branches
+
+- **`main`** — the spec and the atlas, and your starting point.
+- **`trial-run`** — a completed run of the exercise: the game built from this spec
+  via the OpenSpec change workflow, with the solver and its tests. Treat it as one
+  worked answer, not the answer; read it after you have made your own attempt.
