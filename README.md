@@ -111,3 +111,11 @@ Do not redraw or replace it — the frame layout is hard-coded against it. Secti
 the spec maps every cell and, just as importantly, says which frames are opaque terrain
 and which are transparent-backed entities drawn over them. Read that before you write
 `draw`.
+
+## Third-party files
+
+`.claude/skills/openspec-*/` and `.claude/commands/opsx/` are not original work:
+they are installed by the [OpenSpec](https://github.com/Fission-AI/openspec)
+CLI and are MIT licensed, Copyright (c) 2024 OpenSpec Contributors. They are
+kept in the repository so the change workflow that built this branch can be
+read and re-run.
